@@ -1,0 +1,35 @@
+name: Status Check
+
+# Runs in the SEPARATE public status repo — a different failure domain from Vercel, so it keeps
+# reporting even during a full Tryvio outage. Pings public endpoints, regenerates index.html, and
+# commits the result; GitHub Pages serves it. No secrets required.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: status-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Probe services and regenerate the page
+        run: node check.mjs
+      - name: Commit results
+        run: |
+          git config user.name "status-bot"
+          git config user.email "status-bot@users.noreply.github.com"
+          git add index.html history.json
+          git diff --staged --quiet || (git commit -m "status: $(date -u +%FT%TZ)" && git push)
